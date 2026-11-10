@@ -31,11 +31,20 @@ MIN_STROKE_PTS = 2                # 描边最少锚点数
 
 
 def _config_path():
-    """校准持久化文件路径（与脚本同目录）。"""
-    try:
-        base = os.path.dirname(os.path.abspath(__file__))
-    except NameError:
-        base = os.getcwd()
+    """校准持久化文件路径。
+
+    PyInstaller 单文件打包后 __file__ 指向临时解压目录(_MEIPASS)，
+    该目录程序退出即销毁，配置会丢失，因此优先用「可执行文件所在目录」；
+    源码运行时退回脚本所在目录。
+    """
+    import sys
+    if getattr(sys, "frozen", False):          # PyInstaller 打包后为 True
+        base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        try:
+            base = os.path.dirname(os.path.abspath(__file__))
+        except NameError:
+            base = os.getcwd()
     return os.path.join(base, "screen_measure_config.json")
 
 
