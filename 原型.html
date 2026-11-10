@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>屏幕测量工具箱 · 原型</title>
+<style>
+  :root{
+    --bg:#161a20; --panel:#1e232b; --panel2:#252b35; --line:#333b47;
+    --txt:#e6eaf0; --dim:#8b95a5; --acc:#4da3ff; --acc2:#ffcc4d; --ok:#4fd18b;
+    --danger:#ff6b6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);overflow:hidden}
+  #app{display:flex;height:100vh;width:100vw}
+  /* ---------- 左侧模式栏 ---------- */
+  #side{width:230px;flex:0 0 230px;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;overflow-y:auto}
+  #side h1{font-size:16px;margin:14px 14px 4px;letter-spacing:.5px}
+  #side .sub{font-size:11px;color:var(--dim);margin:0 14px 12px}
+  .grp{margin:0 12px 12px;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+  .grp>.t{font-size:11px;color:var(--dim);margin-bottom:8px;letter-spacing:1px}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .mbtn{padding:8px 4px;border:1px solid var(--line);border-radius:6px;background:#20262f;
+    color:var(--txt);font-size:12px;cursor:pointer;text-align:center;transition:.12s}
+  .mbtn:hover{background:#2b3340}
+  .mbtn.on{background:var(--acc);border-color:var(--acc);color:#08131f;font-weight:600}
+  .mbtn .ic{display:block;font-size:15px;margin-bottom:2px}
+  .row{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+  .btn{flex:1;padding:7px 6px;border:1px solid var(--line);border-radius:6px;background:#2a313c;
+    color:var(--txt);font-size:12px;cursor:pointer}
+  .btn:hover{background:#35404e}
+  .btn.warm{background:#3a3320;border-color:#5c4d22;color:var(--acc2)}
+  .btn.warm:hover{background:#4a4029}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{flex:1;padding:6px 0;border:0;background:#20262f;color:var(--dim);font-size:12px;cursor:pointer}
+  .seg button.on{background:var(--acc);color:#08131f;font-weight:600}
+  .cal{font-size:12px;line-height:1.7;color:var(--dim)}
+  .cal b{color:var(--ok);font-size:15px}
+  .cal input{width:64px;background:#141922;border:1px solid var(--line);border-radius:4px;
+    color:var(--txt);padding:3px 5px;font-size:12px}
+  .hint{font-size:11px;color:var(--dim);line-height:1.6;margin:6px 0 0}
+  .hint kbd{background:#141922;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:10px}
+  /* 画布顶部：当前模式使用说明横幅 */
+  #modeTip{position:absolute;left:14px;top:14px;max-width:calc(100% - 300px);
+    background:rgba(10,14,20,.82);border:1px solid var(--line);border-radius:8px;
+    padding:7px 11px;font-size:12px;color:#e6ebf5;line-height:1.5;pointer-events:none;
+    backdrop-filter:blur(3px);box-shadow:0 3px 12px rgba(0,0,0,.35)}
+  #modeTip b{color:#c58cff;font-weight:600}
+  /* (状态栏 #toast 样式已随元素移除) */
+  /* ---------- 画布区 ---------- */
+  #main{position:relative;flex:1;min-width:0}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;
+    background:
+      linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px) 0 0/40px 40px,
+      linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px) 0 0/40px 40px,
+      var(--bg)}
+  /* ---------- 右下结果面板 ---------- */
+  #res{position:absolute;right:14px;bottom:14px;width:270px;max-height:44vh;overflow-y:auto;
+    background:rgba(30,35,43,.94);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;font-size:12px;backdrop-filter:blur(4px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  #res .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  #res .hd .lbl{color:var(--dim);font-size:11px}
+  #res .tot{font-size:20px;font-weight:700;color:var(--acc)}
+  #res .tot small{font-size:11px;color:var(--dim);font-weight:400}
+  #res ul{list-style:none;margin:6px 0 0;padding:6px 0 0;border-top:1px solid var(--line);
+    max-height:22vh;overflow-y:auto}
+  #res li{display:flex;justify-content:space-between;color:var(--dim);padding:2px 0;font-size:11px}
+  #res li b{color:var(--txt);font-weight:500}
+  #res .kv{display:flex;justify-content:space-between;padding:1px 0}
+  #res .kv span{color:var(--dim)}
+  /* ---------- 右键菜单 ---------- */
+  #menu{position:absolute;z-index:50;min-width:170px;background:#262d37;border:1px solid #3d4756;
+    border-radius:8px;padding:5px;box-shadow:0 10px 28px rgba(0,0,0,.55);display:none}
+  #menu div{padding:8px 12px;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap}
+  #menu div:hover{background:var(--acc);color:#08131f}
+  #menu div.dis{opacity:.35;pointer-events:none}
+  #menu hr{border:0;border-top:1px solid #3d4756;margin:4px 2px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>屏幕测量工具箱</h1>
+    <p class="sub">原型 v1.0 · Canvas</p>
+
+    <div class="grp">
+      <div class="t">测量模式</div>
+      <div class="modes" id="modes"></div>
+    </div>
+
+    <div class="grp" id="stateGrp">
+      <div class="t">状态</div>
+      <div class="seg" id="stateSeg">
+        <button data-s="draw" class="on">绘制 draw</button>
+        <button data-s="edit">编辑 edit</button>
+      </div>
+      <p class="hint" id="stateHint">仅折线 / 画笔描边使用。</p>
+    </div>
+
+    <div class="grp">
+      <div class="t">DPI 校准</div>
+      <div class="cal">
+        1 cm = <b id="ppcVal">37.8</b> px<br>
+        手动：<input id="ppcIn" type="number" step="0.1" min="1" value="37.8"> px/cm
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn warm" id="calBtn">用尺子对齐银行卡校准</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="resetCal">恢复 96dpi</button>
+      </div>
+      <p class="hint">切到直尺，把尺子拖到与银行卡等长，再点校准（8.56cm）。校准值存入 localStorage。</p>
+    </div>
+
+    <div class="grp">
+      <div class="t">快捷操作</div>
+      <div class="row">
+        <button class="btn" id="undoBtn">撤销 (Ctrl+Z)</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="clearBtn">清除当前</button>
+      </div>
+      <p class="hint" id="hint">提示区</p>
+    </div>
+
+  </div>
+
+  <div id="main">
+    <canvas id="cv"></canvas>
+    <div id="modeTip"></div>
+    <div id="res">
+      <div class="hd"><span class="lbl" id="resTitle">测量结果</span><span class="tot" id="tot">0.00<small> cm</small></span></div>
+      <div id="resBody"><ul id="list"></ul></div>
+    </div>
+    <div id="menu"></div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ================= 全局状态 (SPEC §1) ================= */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const LS_KEY = 'pptb_pxPerCm';
+
+/* 提示：原常驻状态栏 #toast 已移除，toast() 保留为空操作，避免历史调用报错 */
+function toast(msg){ /* no-op：状态栏已去掉 */ }
+
+let pxPerCm = 37.8;                 // 1cm = 多少 px，默认 96dpi
+try{ const s = localStorage.getItem(LS_KEY); if(s){ const v = parseFloat(s); if(v>1) pxPerCm = v; } }catch(e){}
+let mode = 'ruler';                 // ruler|polyline|stroke|angle|area|circle
+let measureState = 'draw';          // draw|edit (仅折线/描边)
+
+/* 测量对象 (SPEC §2) */
+const S = {
+  polylines: [],                    // [{pts:[{x,y}], closed:false}]
+  strokes:   [],                    // [{anchors:[{x,y}], closed:false}]
+  angle:  null,                     // {a,v,b}
+  area:   null,                     // {pts:[], closed:false}
+  circle: null,                     // {pts:[], center, r}
+  ruler:  null                      // {x,y,len,angle}
+};
+
+/* 绘制中的临时数据 */
+let curPts = [];                    // 折线/面积/圆/角度 当前点
+let curStroke = null;               // 描边绘制中 {raw:[], anchors:[]}
+let mouse = {x:0,y:0,in:false};
+
+/* 命中/拖拽 */
+let hit = null;                     // {kind, li, pi, ...}
+let drag = null;                    // 拖拽会话
+let hoverPt = null;                 // 描边编辑：曲线上悬停点(用于插入)
+let insertPair = null;              // 描边编辑：待插入的两锚点 {li,i1,i2}
+
+/* 历史（Ctrl+Z 撤销，快照法） */
+let hist = [];
+function snap(){ return JSON.stringify(S); }
+function pushHist(){ hist.push(snap()); if(hist.length>80) hist.shift(); }
+function undo(){
+  if(!hist.length){ toast('没有可撤销的操作'); return; }
+  const s = JSON.parse(hist.pop());
+  Object.keys(S).forEach(k=>S[k]=s[k]);
+  curPts=[]; curStroke=null; drag=null; hit=null; insertPair=null;
+  toast('已撤销'); refresh(); render();
+}
+
+/* ================= 几何 / 单位 (SPEC §3 §8 §9) ================= */
+const dist = (p,q)=>Math.hypot(p.x-q.x,p.y-q.y);
+const px2cm = px=>px/pxPerCm;
+const cm2px = cm=>cm*pxPerCm;
+const f2 = n=>n.toFixed(2);
+
+function ptSegDist(p,a,b){                 // 点到线段距离 + 投影参数 (SPEC §8)
+  const vx=b.x-a.x, vy=b.y-a.y, wx=p.x-a.x, wy=p.y-a.y;
+  const L2 = vx*vx+vy*vy;
+  const t = L2 ? Math.max(0,Math.min(1,(wx*vx+wy*vy)/L2)) : 0;
+  return {d:Math.hypot(p.x-(a.x+t*vx), p.y-(a.y+t*vy)), t};
+}
+
+/* 折线总长：Σ dist 相邻点 */
+function polyLen(pts){
+  let L=0; for(let i=1;i<pts.length;i++) L+=dist(pts[i-1],pts[i]); return L;
+}
+
+/* ---- Catmull-Rom 样条 (SPEC §4) ----
+   q(t)=0.5*((2p1)+(-p0+p2)t+(2p0-5p1+4p2-p3)t^2+(-p0+3p1-3p2+p3)t^3)
+   闭合：首尾环绕；开口：端点用最近锚点补齐。绝不自动生成密集锚点。 */
+function catmullRom(A, closed, seg){
+  seg = seg||24;
+  const n=A.length, out=[];
+  if(n<2) return A.slice();
+  if(n===2){ return [A[0],A[1]]; }
+  for(let i=0;i<(closed?n:n-1);i++){
+    let p0,p1,p2,p3;
+    if(closed){ p0=A[(i-1+n)%n]; p1=A[i]; p2=A[(i+1)%n]; p3=A[(i+2)%n]; }
+    else{ p0=A[Math.max(0,i-1)]; p1=A[i]; p2=A[i+1]; p3=A[Math.min(n-1,i+2)]; }
+    for(let j=0;j<seg;j++){
+      const t=j/seg, t2=t*t, t3=t2*t;
+      const q = function(k){
+        return 0.5*((2*p1[k]) + (-p0[k]+p2[k])*t + (2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2 + (-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3);
+      };
+      out.push({x:q('x'), y:q('y')});
+    }
+  }
+  out.push(closed?A[0]:A[n-1]);
+  return out;
+}
+/* 样条长度：对采样点逐段累加 Σ dist */
+function crLen(A, closed){
+  const pts = catmullRom(A, closed);
+  let L=0; for(let i=1;i<pts.length;i++) L+=dist(pts[i-1],pts[i]);
+  return L;
+}
+
+/* ================= 直尺几何 (SPEC §7) ================= */
+function rulerEnds(R){
+  const c=Math.cos(R.angle), s=Math.sin(R.angle);
+  return { a:{x:R.x, y:R.y}, b:{x:R.x+c*R.len, y:R.y+s*R.len} };
+}
+function makeRuler(){
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const len = cm2px(8.56);                        // 默认银行卡长度
+  return { x:w/2-len/2, y:h/2, len:len, angle:0 };
+}
+function ensureRuler(){ if(!S.ruler) S.ruler = makeRuler(); return S.ruler; }
+
+/* ================= 描边绘制：平滑 + 抽稀锚点 (SPEC §4) ================= */
+/* 采样降频(>2px) -> 滑动平均(窗口4) -> 按累积距离每 ~24px 抽一个锚点 */
+function smooth(pts, w){
+  w = w||4; const out=[];
+  for(let i=0;i<pts.length;i++){
+    let sx=0, sy=0, c=0;
+    for(let j=Math.max(0,i-w); j<=Math.min(pts.length-1,i+w); j++){ sx+=pts[j].x; sy+=pts[j].y; c++; }
+    out.push({x:sx/c, y:sy/c});
+  }
+  return out;
+}
+function thinToAnchors(sm, gap){
+  gap = gap||24;
+  if(!sm.length) return [];
+  const A=[sm[0]]; let acc=0;
+  for(let i=1;i<sm.length;i++){
+    acc += dist(sm[i-1], sm[i]);
+    if(acc >= gap){ A.push(sm[i]); acc=0; }
+  }
+  const last = sm[sm.length-1];
+  if(dist(A[A.length-1], last) > 6) A.push(last);   // 收尾
+  return A;
+}
+function beginStroke(p){ curStroke = {raw:[p], anchors:[]}; }
+function addStrokeRaw(p){
+  const raw = curStroke.raw, last = raw[raw.length-1];
+  if(dist(last,p) < 2) return;                      // 采样降频
+  raw.push(p);
+  curStroke.anchors = thinToAnchors(smooth(raw,4), 24);
+}
+function endStroke(){
+  if(curStroke && curStroke.anchors.length>=2){
+    pushHist();
+    S.strokes.push({anchors:curStroke.anchors, closed:false});
+  }
+  curStroke = null;
+}
+
+/* ================= 面积：鞋带公式 (SPEC §9) ================= */
+function polyArea(pts){
+  let s=0;
+  for(let i=0;i<pts.length;i++){
+    const p=pts[i], q=pts[(i+1)%pts.length];
+    s += p.x*q.y - q.x*p.y;
+  }
+  return Math.abs(s)/2;                              // px^2
+}
+/* 角度：acos(点积/模积) */
+function angleDeg(a,v,b){
+  const v1={x:a.x-v.x,y:a.y-v.y}, v2={x:b.x-v.x,y:b.y-v.y};
+  const m = Math.hypot(v1.x,v1.y)*Math.hypot(v2.x,v2.y);
+  if(!m) return 0;
+  return Math.acos(Math.max(-1,Math.min(1,(v1.x*v2.x+v1.y*v2.y)/m)))*180/Math.PI;
+}
+/* 三点拟合圆 (SPEC §9)：解二元一次方程组求圆心 */
+function fitCircle(p1,p2,p3){
+  const ax=p1.x, ay=p1.y, bx=p2.x, by=p2.y, cx=p3.x, cy=p3.y;
+  const d = 2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
+  if(Math.abs(d) < 1e-6) return null;                // 共线
+  const ux = ((ax*ax+ay*ay)*(by-cy)+(bx*bx+by*by)*(cy-ay)+(cx*cx+cy*cy)*(ay-by))/d;
+  const uy = ((ax*ax+ay*ay)*(cx-bx)+(bx*bx+by*by)*(ax-cx)+(cx*cx+cy*cy)*(bx-ax))/d;
+  const center = {x:ux, y:uy};
+  return { center:center, r:dist(center,p1) };
+}
+/* merge：把多段按端点最近原则贪心串接 (SPEC §5)
+   list = [{pts:pointArray}]，返回串接后的单条点序列 */
+function greedyConcat(list){
+  const pool = list.map(p=>p.pts.map(q=>({x:q.x,y:q.y})));
+  const used = new Array(pool.length).fill(false);
+  let merged = pool[0]; used[0]=true;
+  let total = pool.length-1;
+  let guard = 0;
+  while(total>0 && guard++ < 500){
+    let best=-1, bestD=Infinity, bestRev=false;
+    const tail = merged[merged.length-1], head = merged[0];
+    for(let i=0;i<pool.length;i++){
+      if(used[i]) continue;
+      const P = pool[i];
+      const cand = [
+        {d:dist(tail,P[0]), rev:false},
+        {d:dist(tail,P[P.length-1]), rev:true},
+        {d:dist(head,P[P.length-1]), rev:false, pre:true},
+        {d:dist(head,P[0]), rev:true, pre:true}
+      ];
+      for(const c of cand){
+        if(c.d < bestD){ bestD=c.d; best=i; bestRev=c.rev; }
+      }
+    }
+    if(best<0) break;
+    used[best]=true; total--;
+    let seg = pool[best].slice();
+    if(bestRev) seg = seg.reverse();
+    // 判断接尾还是接头
+    if(dist(tail, seg[0]) <= dist(head, seg[seg.length-1])) merged = merged.concat(seg.slice(1));
+    else merged = seg.slice(0,-1).concat(merged);
+  }
+  return merged;
+}
+function mergePolylines(){
+  const list = S.polylines.filter(p=>p.pts.length>=2);
+  if(list.length<2){ toast('至少需要两条折线才能连成一段'); return null; }
+  const merged = greedyConcat(list);
+  const L = polyLen(merged);
+  S.polylines = [{pts:merged, closed:false}];
+  return L;
+}
+
+/* 描边合并：anchors -> Catmull-Rom 重采样成密集点 -> 贪心串接 -> 平滑+抽稀回稀疏 anchors */
+function strokeToDense(K, seg){
+  seg = seg||16;
+  const samp = catmullRom(K.anchors, K.closed, seg);
+  return samp;
+}
+function mergeStrokes(){
+  const list = S.strokes.filter(k=>k.anchors.length>=2);
+  if(list.length<2){ toast('至少需要两条描边才能连成一段'); return null; }
+  // 每条描边重采样为密集点，再喂给端点最近贪心串接
+  const denseList = list.map(k=>({pts:strokeToDense(k,16)}));
+  const dense = greedyConcat(denseList);
+  // 平滑后按 ~24px 抽稀回稀疏锚点
+  const sm = smooth(dense, 4);
+  const anchors = thinToAnchors(sm, 24);
+  if(anchors.length<2) return null;
+  S.strokes = [{anchors:anchors, closed:false}];
+  return crLen(anchors, false);
+}
+
+/* ================= 渲染 ================= */
+const COL = {
+  ruler:'#4da3ff', rulerBody:'rgba(77,163,255,.12)', yel:'#ffcc4d', grn:'#4fd18b',
+  poly:'#4da3ff', stroke:'#ff9f4d', angle:'#c58cff', area:'rgba(79,209,139,.18)',
+  areaLine:'#4fd18b', circle:'#ff6b9d', cur:'#ffffff', anchor:'#ffcc4d', mid:'#4fd18b'
+};
+function line(a,b,c,w){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+  ctx.strokeStyle=c||'#fff'; ctx.lineWidth=w||2; ctx.stroke(); }
+function dot(p,r,c){ ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fillStyle=c; ctx.fill(); }
+function ring(p,r,c,w){ ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.strokeStyle=c; ctx.lineWidth=w||2; ctx.stroke(); }
+function label(p,txt,c,dy){
+  ctx.font='12px Segoe UI,Microsoft YaHei'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const w = ctx.measureText(txt).width+10;
+  ctx.fillStyle='rgba(10,14,20,.82)'; ctx.fillRect(p.x-w/2, p.y+(dy||-24)-9, w, 18);
+  ctx.fillStyle=c||'#fff'; ctx.fillText(txt, p.x, p.y+(dy||-24));
+}
+function drawPolyPath(pts, closed, color, w){
+  if(pts.length<2) return;
+  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+  if(closed) ctx.closePath();
+  ctx.strokeStyle=color; ctx.lineWidth=w||2.5; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke();
+}
+function drawAnchor(p, sq, c){
+  if(sq){ ctx.fillStyle=c; ctx.fillRect(p.x-5,p.y-5,10,10);
+    ctx.strokeStyle='#141922'; ctx.lineWidth=1.5; ctx.strokeRect(p.x-5,p.y-5,10,10); }
+  else dot(p,5,c);
+}
+
+/* --- 直尺：带 mm/cm 刻度 --- */
+function drawRuler(R){
+  const {a,b} = rulerEnds(R);
+  ctx.save();
+  // 尺身
+  ctx.translate(a.x,a.y); ctx.rotate(R.angle);
+  const H=34;
+  ctx.fillStyle=COL.rulerBody; ctx.fillRect(0,0,R.len,-H);
+  ctx.strokeStyle=COL.ruler; ctx.lineWidth=1.5; ctx.strokeRect(0,0,R.len,-H);
+  // 刻度：每 mm 一细线，整 cm 长线+数字，按 pxPerCm 自动重排
+  const mm = pxPerCm/10;
+  ctx.lineWidth=1;
+  ctx.font='10px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let k=0; k*mm <= R.len; k++){
+    const x = k*mm;
+    const isCm = (k%10===0), isHalf = (k%5===0);
+    const L = isCm?14:(isHalf?9:5);
+    ctx.strokeStyle = isCm?'#cfe6ff':'rgba(207,230,255,.55)';
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,-L); ctx.stroke();
+    if(isCm) { ctx.fillStyle='#cfe6ff'; ctx.fillText(String(k/10), x, -27); }
+  }
+  ctx.restore();
+  // 两端
+  line(a,b,COL.ruler,2);
+  // 黄色右端块 = 改长
+  ctx.fillStyle=COL.yel; ctx.fillRect(b.x-8,b.y-8,16,16);
+  ctx.strokeStyle='#141922'; ctx.lineWidth=1.5; ctx.strokeRect(b.x-8,b.y-8,16,16);
+  // 绿色左端圆点 = 旋转
+  dot(a,8,COL.grn); ctx.strokeStyle='#141922'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(a.x,a.y,8,0,7); ctx.stroke();
+  // 读数
+  const cm = px2cm(R.len);
+  const deg = ((R.angle*180/Math.PI)%360+360)%360;
+  const mid = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+  label(mid, f2(cm)+' cm / '+Math.round(R.len)+' px   '+f2(deg)+'°', COL.ruler, -46);
+}
+
+/* --- 折线 --- */
+function drawPolyline(P, idx, editing){
+  const pts=P.pts; if(pts.length<2) return;
+  drawPolyPath(pts, P.closed, COL.poly, 2.5);
+  // 逐段长度
+  for(let i=1;i<pts.length;i++){
+    const L=dist(pts[i-1],pts[i]);
+    label({x:(pts[i-1].x+pts[i].x)/2, y:(pts[i-1].y+pts[i].y)/2}, f2(px2cm(L)), COL.poly, -14);
+  }
+  if(editing){
+    for(let i=0;i<pts.length;i++){
+      drawAnchor(pts[i], true, COL.anchor);
+      // 中点 [+] 插点标记
+      if(i<pts.length-1){
+        const m={x:(pts[i].x+pts[i+1].x)/2, y:(pts[i].y+pts[i+1].y)/2};
+        dot(m,4,COL.mid); ctx.fillStyle='#141922'; ctx.font='9px Segoe UI';
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('+',m.x,m.y+0.5);
+      }
+    }
+  }
+}
+/* --- 描边：Catmull-Rom 穿过稀疏锚点 --- */
+function drawStroke(K, editing, hl){
+  const A=K.anchors; if(A.length<2) return;
+  const closed = editing ? K.closed : K.closed;
+  const samp = catmullRom(A, closed);
+  drawPolyPath(samp, closed, hl||COL.stroke, 3);
+  if(editing){
+    for(let i=0;i<A.length;i++) drawAnchor(A[i], true, COL.anchor);
+  }
+}
+
+/* --- 角度 --- */
+function drawAngle(A){
+  if(!A) return;
+  const pts=[A.a,A.v,A.b];
+  // 两边
+  line(A.a,A.v,COL.angle,2.5); line(A.v,A.b,COL.angle,2.5);
+  pts.forEach(p=>drawAnchor(p,false,COL.angle));
+  // 弧 + 度数
+  const deg = angleDeg(A.a,A.v,A.b);
+  let a1=Math.atan2(A.a.y-A.v.y,A.a.x-A.v.x), a2=Math.atan2(A.b.y-A.v.y,A.b.x-A.v.x);
+  let diff=a2-a1; while(diff>Math.PI)diff-=2*Math.PI; while(diff<-Math.PI)diff+=2*Math.PI;
+  ctx.beginPath(); ctx.arc(A.v.x,A.v.y,34, a1, a1+diff, diff<0); ctx.strokeStyle=COL.angle; ctx.lineWidth=2; ctx.stroke();
+  label(A.v, f2(deg)+'°', COL.angle, -40);
+  ctx.font='11px Segoe UI'; ctx.fillStyle='#c58cff'; ctx.textAlign='center';
+  ctx.fillText('边点',A.a.x,A.a.y-14); ctx.fillText('顶点',A.v.x,A.v.y+18); ctx.fillText('边点',A.b.x,A.b.y-14);
+}
+/* --- 面积 --- */
+function drawArea(A, closed){
+  if(!A||A.pts.length<2) return;
+  const pts=A.pts;
+  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+  if(closed) ctx.closePath();
+  ctx.fillStyle=COL.area; ctx.fill();
+  ctx.strokeStyle=COL.areaLine; ctx.lineWidth=2.5; ctx.stroke();
+  pts.forEach(p=>drawAnchor(p,true,COL.areaLine));
+  if(closed){
+    const c=pts.reduce((acc,p)=>({x:acc.x+p.x/pts.length,y:acc.y+p.y/pts.length}),{x:0,y:0});
+    label(c, f2(px2cm(polyArea(pts)))+' cm²', COL.areaLine, 0);
+  }
+}
+/* --- 圆 --- */
+function drawCircle(C){
+  if(!C||C.pts.length<3||!C.center) return;
+  ring(C.center, C.r, COL.circle, 2.5);
+  dot(C.center,4,COL.circle);
+  C.pts.forEach(p=>dot(p,5,COL.circle));
+  const d=2*C.r;
+  const rcm=px2cm(C.r), dcm=px2cm(d);
+  const cc=2*Math.PI*C.r, ac=Math.PI*C.r*C.r;
+  const lines=[
+    ['直径', f2(dcm)+' cm'],
+    ['半径', f2(rcm)+' cm'],
+    ['周长', f2(px2cm(cc))+' cm'],
+    ['面积', f2(px2cm(ac))+' cm²']
+  ];
+  ctx.font='12px Segoe UI,Microsoft YaHei'; ctx.textAlign='left'; ctx.textBaseline='top';
+  const bx=C.center.x+C.r+14, by=C.center.y-30;
+  ctx.fillStyle='rgba(10,14,20,.85)'; ctx.fillRect(bx-6,by-6,150,lines.length*17+10);
+  ctx.strokeStyle=COL.circle; ctx.strokeRect(bx-6,by-6,150,lines.length*17+10);
+  lines.forEach((kv,i)=>{
+    ctx.fillStyle='#8b95a5'; ctx.fillText(kv[0], bx, by+i*17);
+    ctx.fillStyle='#fff'; ctx.textAlign='right'; ctx.fillText(kv[1], bx+138, by+i*17); ctx.textAlign='left';
+  });
+}
+/* --- 主渲染 --- */
+function render(){
+  ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
+  const edit = measureState==='edit';
+  // 已固化对象
+  if(mode==='ruler' && S.ruler) drawRuler(S.ruler);
+  if(mode==='polyline'){
+    S.polylines.forEach((P,i)=>drawPolyline(P,i, edit));
+    if(!edit && curPts.length) drawPolyPath(curPts.concat([mouse.in?mouse:curPts[curPts.length-1]]), false, COL.cur, 2);
+    if(!edit && curPts.length) curPts.forEach(p=>dot(p,4,COL.cur));
+  }
+  if(mode==='stroke'){
+    S.strokes.forEach(K=>drawStroke(K, edit));
+    if(!edit && curStroke && curStroke.anchors.length>=2) drawStroke({anchors:curStroke.anchors,closed:false}, false, COL.cur);
+  }
+  if(mode==='angle'){
+    if(S.angle) drawAngle(S.angle);
+    else if(curPts.length){
+      const t={a:curPts[0], v:curPts[1]||mouse, b:mouse};
+      if(curPts.length===1) drawAngle({a:curPts[0],v:mouse,b:mouse});
+      else drawAngle({a:curPts[0],v:curPts[1],b:mouse});
+    }
+  }
+  if(mode==='area'){
+    const closed = !!(S.area && S.area.closed);
+    drawArea(S.area || {pts:curPts}, closed || (!S.area&&curPts.length>1));
+    if(!S.area && mouse.in && curPts.length) line(curPts[curPts.length-1], mouse, COL.cur,1.5);
+  }
+  if(mode==='circle'){
+    if(S.circle){ drawCircle(S.circle); }
+    else if(curPts.length){
+      // 每点一个可见点标记
+      curPts.forEach(p=>dot(p,5,COL.circle));
+      const c = fitCircle(curPts[0], curPts[1]||mouse, curPts[2]||mouse);
+      if(c) drawCircle({pts:curPts, center:c.center, r:c.r});
+      // 预览辅助线：已点 -> 下一点(鼠标)
+      if(mouse.in && curPts.length<3){
+        curPts.forEach(p=>line(p,mouse,COL.cur,1));
+      }
+    }
+  }
+  // 描边编辑：曲线上插入提示
+  if(mode==='stroke' && edit && hoverPt && insertPair){
+    ring(hoverPt,6,'#fff',2); dot(hoverPt,3,'#fff');
+  }
+  // 折线绘制：双击提示
+  if(mode==='polyline' && !edit && curPts.length>=2){
+    label(curPts[curPts.length-1],'双击固化这条', '#8b95a5', 20);
+  }
+}
+
+/* ================= 命中测试 (SPEC §8) ================= */
+const HIT_PT=10, HIT_END=12, HIT_BODY=18;
+function hitRuler(p){
+  const R=S.ruler; if(!R) return null;
+  const {a,b}=rulerEnds(R);
+  if(dist(p,a)<HIT_END) return {kind:'rot'};
+  if(dist(p,b)<HIT_END) return {kind:'len'};
+  if(ptSegDist(p,a,b).d<HIT_BODY) return {kind:'body'};
+  return null;
+}
+function hitPolyPt(p){                                  // 折线编辑：锚点 / 中点
+  for(let li=0; li<S.polylines.length; li++){
+    const pts=S.polylines[li].pts;
+    for(let pi=0; pi<pts.length; pi++){
+      if(dist(p,pts[pi])<HIT_PT) return {kind:'vtx', li:li, pi:pi};
+    }
+    for(let pi=0; pi<pts.length-1; pi++){
+      const m={x:(pts[pi].x+pts[pi+1].x)/2, y:(pts[pi].y+pts[pi+1].y)/2};
+      if(dist(p,m)<HIT_PT) return {kind:'mid', li:li, pi:pi};
+    }
+  }
+  return null;
+}
+function hitStrokePt(p){                                // 描边编辑：锚点
+  for(let li=0; li<S.strokes.length; li++){
+    const A=S.strokes[li].anchors;
+    for(let pi=0; pi<A.length; pi++){
+      if(dist(p,A[pi])<HIT_PT) return {kind:'anc', li:li, pi:pi};
+    }
+  }
+  return null;
+}
+function strokeSamples(K){                              // 全曲线采样，每个采样点带所在锚点区间
+  const A=K.anchors, n=A.length;
+  if(n<2) return [];
+  const seg=12, out=[];
+  const segTotal = K.closed ? n : n-1;
+  const pts = catmullRom(A, K.closed, seg);
+  // catmullRom 输出：每段 seg 点 + 1 收尾点，按段映射
+  for(let s=0; s<segTotal; s++){
+    for(let j=0;j<seg;j++){
+      const idx = s*seg + j;
+      if(idx < pts.length) out.push({p:pts[idx], s:s});
+    }
+  }
+  out.push({p:pts[pts.length-1], s:segTotal-1});
+  return out;
+}
+function hitStrokeCurve(p){                             // 描边编辑：曲线上取点(用于插锚点)
+  for(let li=0; li<S.strokes.length; li++){
+    const K=S.strokes[li], A=K.anchors, n=A.length;
+    if(n<2) continue;
+    const sm = strokeSamples(K);
+    for(let k=0;k<sm.length;k++){
+      if(dist(p,sm[k].p)<8){
+        const s = sm[k].s;
+        const i1 = s, i2 = (s+1)%n;
+        return {kind:'curve', li:li, i1:i1, i2:i2, pt:{x:p.x,y:p.y}};
+      }
+    }
+  }
+  return null;
+}
+function hitStrokeLine(p){                              // 命中"这一条"描边
+  for(let li=0; li<S.strokes.length; li++){
+    const sm = strokeSamples(S.strokes[li]);
+    for(let k=1;k<sm.length;k++){ if(ptSegDist(p,sm[k-1].p,sm[k].p).d<10) return li; }
+  }
+  return null;
+}
+function hitPolyLine(p){                                // 命中"这一条"折线
+  for(let li=0; li<S.polylines.length; li++){
+    const pts=S.polylines[li].pts;
+    for(let i=1;i<pts.length;i++){ if(ptSegDist(p,pts[i-1],pts[i]).d<10) return li; }
+  }
+  return null;
+}
+/* 折线绘制态：点击是否命中已有折线点(用于"编辑已有测量") */
+function hitAnyForEdit(p){
+  const h = hitPolyPt(p) || hitStrokePt(p) || hitStrokeCurve(p);
+  return h;
+}
+
+/* ================= 画布尺寸 & 坐标 ================= */
+function resize(){
+  const dpr = window.devicePixelRatio||1;
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(mode==='ruler' && S.ruler){
+    // 尺子若超出画布则拉回可见区
+    S.ruler.x = Math.min(S.ruler.x, r.width-20); S.ruler.y = Math.min(S.ruler.y, r.height-20);
+  }
+  render();
+}
+function pos(e){
+  const r = cv.getBoundingClientRect();
+  return {x:e.clientX-r.left, y:e.clientY-r.top};
+}
+
+/* ================= 模式/状态切换 ================= */
+/* 画布"有内容"：折线/描边非空或 angle/area/circle 非空；直尺尺子常驻不算内容 */
+function hasCanvasContent(){
+  return S.polylines.length>0 || S.strokes.length>0 ||
+         !!S.angle || !!S.area || !!S.circle;
+}
+function setMode(m, confirm){
+  if(m===mode) return;
+  mode = m;
+  // 切换测量模式自动回到绘制态（第3点）
+  measureState = 'draw';
+  curPts=[]; curStroke=null; drag=null; hit=null; hoverPt=null; insertPair=null;
+  // 切换模式时询问是否清空画布（第1点）：确定→清空全部测量；取消→保留
+  if(confirm!==false && hasCanvasContent()){
+    if(window.confirm('是否清空当前画布内容？\n\n确定=清空后进入新模式；取消=保留现有测量并进入新模式。')){
+      S.polylines=[]; S.strokes=[]; S.angle=null; S.area=null; S.circle=null;
+    }
+  } else {
+    S.angle=null; S.area=null; S.circle=null;
+  }
+  curPts=[]; curStroke=null;
+  if(S.ruler===null && m==='ruler') ensureRuler();
+  document.querySelectorAll('#modes .mbtn').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  document.querySelectorAll('#stateSeg button').forEach(b=>b.classList.toggle('on', b.dataset.s===measureState));
+  const sg=document.getElementById('stateSeg');
+  sg.style.display = (m==='polyline'||m==='stroke')?'flex':'none';
+  refresh(); render();
+}
+function setState(st){
+  measureState = st;
+  document.querySelectorAll('#stateSeg button').forEach(b=>b.classList.toggle('on', b.dataset.s===st));
+  curPts=[]; curStroke=null; drag=null; hoverPt=null; insertPair=null;
+  refresh(); render();
+}
+/* ================= 各模式：点够即出结果 ================= */
+function addPt(p){
+  if(mode==='polyline'){ curPts.push(p); }
+  else if(mode==='angle'){
+    curPts.push(p);
+    if(curPts.length===3){ pushHist(); S.angle={a:curPts[0],v:curPts[1],b:curPts[2]}; curPts=[]; toast('角度已测得：'+f2(angleDeg(S.angle.a,S.angle.v,S.angle.b))+'°'); }
+  }
+  else if(mode==='circle'){
+    curPts.push(p);
+    if(curPts.length===3){
+      const c=fitCircle(curPts[0],curPts[1],curPts[2]);
+      if(!c){ toast('三点共线，无法拟合圆，请重选'); curPts=[]; }
+      else { pushHist(); S.circle={pts:curPts.slice(), center:c.center, r:c.r}; curPts=[]; toast('圆已拟合'); }
+    }
+  }
+  refresh(); render();
+}
+function hitAngleVertex(p){
+  if(!S.angle) return null;
+  const keys=['a','v','b'];
+  for(const k of keys){ if(dist(p,S.angle[k])<12) return k; }
+  return null;
+}
+function dblClick(p){
+  if(mode==='polyline' && measureState==='draw'){
+    if(curPts.length>=2){ pushHist(); S.polylines.push({pts:curPts.slice(), closed:false}); curPts=[]; toast('已固化一条折线，接着点画下一条'); }
+    else { curPts=[]; }
+  }
+  else if(mode==='area'){
+    if(!S.area){
+      if(curPts.length>=3){ pushHist(); S.area={pts:curPts.slice(), closed:true}; curPts=[]; toast('多边形已闭合，面积 '+f2(px2cm(polyArea(S.area.pts)))+' cm²'); }
+    }
+  }
+  else if(mode==='stroke' && measureState==='edit'){
+    const li = hitStrokeLine(p);
+    if(li!==null){ pushHist(); const K=S.strokes[li]; K.closed=!K.closed; toast(K.closed?'该描边已闭合':'该描边已开口'); }
+  }
+  refresh(); render();
+}
+
+/* ================= 鼠标事件 ================= */
+cv.addEventListener('contextmenu', e=>{ e.preventDefault(); onContextMenu(e); });
+cv.addEventListener('mousedown', e=>{
+  const p = pos(e);
+  if(e.button!==0) return;
+  hideMenu();
+  // ---- 直尺 ----
+  if(mode==='ruler'){
+    const R=ensureRuler(); const h=hitRuler(p);
+    pushHist();
+    if(h && h.kind==='len') drag={kind:'rlen'};
+    else if(h && h.kind==='rot') drag={kind:'rrot'};
+    else if(h && h.kind==='body'){ const {a}=rulerEnds(R); drag={kind:'rbody', dx:p.x-R.x, dy:p.y-R.y}; }
+    else { // 点空白：把直尺起点（左端）放到该点，方向保持不变
+      R.x = p.x; R.y = p.y;
+    }
+    render(); return;
+  }
+  // ---- 折线 ----
+  if(mode==='polyline'){
+    if(measureState==='edit'){
+      const h = hitPolyPt(p);
+      if(h){
+        pushHist();
+        if(h.kind==='vtx') drag={kind:'pv', li:h.li, pi:h.pi};
+        else if(h.kind==='mid'){ // 插入锚点
+          const pts=S.polylines[h.li].pts;
+          pts.splice(h.pi+1,0,{x:p.x,y:p.y});
+          drag={kind:'pv', li:h.li, pi:h.pi+1};
+        }
+        render();
+      }
+    } else {
+      addPt(p);
+    }
+    return;
+  }
+  // ---- 描边 ----
+  if(mode==='stroke'){
+    if(measureState==='draw'){
+      beginStroke(p); drag={kind:'draw'}; render(); return;
+    } else {
+      const h = hitStrokePt(p);
+      if(h){ pushHist(); drag={kind:'sa', li:h.li, pi:h.pi}; render(); return; }
+      const c = hitStrokeCurve(p);
+      if(c){ // 曲线上点一下 -> 待插入，再点第二个点确认插入
+        pushHist();
+        const K=S.strokes[c.li]; const n=K.anchors.length;
+        let idx = (c.i1+1)%(n||1);
+        if(!K.closed && c.i2===0) idx=n;                 // 接在末尾
+        K.anchors.splice(idx,0,{x:p.x,y:p.y});
+        drag={kind:'sa', li:c.li, pi:idx};
+        insertPair=null; hoverPt=null;
+        toast('已插入锚点，拖动调整'); render(); return;
+      }
+    }
+    return;
+  }
+  // ---- 角度/面积/圆 ----
+  if(mode==='angle'){
+    // 已固化的角度：点中三个顶点之一 -> 拖动改形
+    if(S.angle){
+      const k = hitAngleVertex(p);
+      if(k){ pushHist(); drag={kind:'av', key:k}; render(); return; }
+      return;                                  // 固化后点空白不重置，靠右键清除
+    }
+    addPt(p); return;
+  }
+  if(mode==='circle'){ addPt(p); return; }
+  if(mode==='area'){
+    if(S.area){ toast('已有面积，右键清除当前测量后重画'); return; }
+    curPts.push(p); refresh(); render();
+  }
+});
+
+cv.addEventListener('mousemove', e=>{
+  const p = pos(e); mouse.x=p.x; mouse.y=p.y; mouse.in=true;
+  if(drag){
+    if(drag.kind==='rlen'){
+      const R=S.ruler, {a}=rulerEnds(R);
+      R.len = Math.max(cm2px(1), dist(a,p));
+      R.angle = Math.atan2(p.y-a.y, p.x-a.x);
+    } else if(drag.kind==='rrot'){
+      const R=S.ruler, {a}=rulerEnds(R);
+      R.angle = Math.atan2(p.y-a.y, p.x-a.x);
+    } else if(drag.kind==='rbody'){
+      S.ruler.x = p.x-drag.dx; S.ruler.y = p.y-drag.dy;
+    } else if(drag.kind==='pv'){
+      const pts=S.polylines[drag.li].pts; pts[drag.pi].x=p.x; pts[drag.pi].y=p.y;
+    } else if(drag.kind==='sa'){
+      const A=S.strokes[drag.li].anchors; A[drag.pi].x=p.x; A[drag.pi].y=p.y;
+    } else if(drag.kind==='av'){
+      S.angle[drag.key]={x:p.x, y:p.y};      // 拖动顶点改形，夹角实时刷新
+    } else if(drag.kind==='draw'){
+      addStrokeRaw(p);
+    }
+    render();
+  } else {
+    if(mode==='polyline'&&measureState==='edit') {}
+    if(mode==='stroke'&&measureState==='edit'){
+      const c=hitStrokeCurve(p);
+      hoverPt = c? c.pt : null;
+      insertPair = c? {li:c.li,i1:c.i1,i2:c.i2} : null;
+    }
+    render();
+  }
+  refresh();   // 实时刷新读数（含折线预览长度）
+});
+cv.addEventListener('mouseleave', ()=>{ mouse.in=false; render(); });
+cv.addEventListener('dblclick', e=>{ e.preventDefault(); dblClick(pos(e)); });
+window.addEventListener('mouseup', e=>{
+  if(e.button!==0) return;
+  if(drag && drag.kind==='draw'){ endStroke(); refresh(); }
+  drag=null; render();
+});
+window.addEventListener('keydown', e=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+  if(e.key==='Escape'){ hideMenu(); }
+});
+
+/* ================= 右键菜单 (SPEC §10) ================= */
+const menuEl = document.getElementById('menu');
+function hideMenu(){ menuEl.style.display='none'; }
+document.addEventListener('mousedown', e=>{ if(!menuEl.contains(e.target)) hideMenu(); });
+function showMenu(e, items){
+  menuEl.innerHTML='';
+  items.forEach(it=>{
+    if(it==='-'){ const h=document.createElement('hr'); menuEl.appendChild(h); return; }
+    const d=document.createElement('div');
+    d.textContent=it.label;
+    if(it.dis) d.className='dis';
+    else d.onclick=()=>{ hideMenu(); it.fn(); };
+    menuEl.appendChild(d);
+  });
+  const main=document.getElementById('main').getBoundingClientRect();
+  menuEl.style.display='block';
+  const mw=menuEl.offsetWidth, mh=menuEl.offsetHeight;
+  let x=e.clientX-main.left, y=e.clientY-main.top;
+  if(x+mw>main.width) x=main.width-mw-6;
+  if(y+mh>main.height) y=main.height-mh-6;
+  menuEl.style.left=x+'px'; menuEl.style.top=y+'px';
+}
+function onContextMenu(e){
+  const p=pos(e);
+  // 直尺
+  if(mode==='ruler'){
+    showMenu(e,[
+      {label:'对齐银行卡(8.56cm)校准', fn:calibrate},
+      {label:'重置为默认长度(8.56cm)', fn:()=>{ pushHist(); S.ruler=makeRuler(); toast('已重置尺子'); render(); }},
+      '-',
+      {label:'清除当前', fn:()=>{ pushHist(); S.ruler=null; toast('已清除尺子'); render(); }}
+    ]);
+    return;
+  }
+  // 角度/面积/圆
+  if(mode==='angle'||mode==='area'||mode==='circle'){
+    const cur = mode==='angle'?S.angle : mode==='area'?S.area : S.circle;
+    showMenu(e,[
+      {label:'清除当前测量', dis: !cur, fn:()=>{ pushHist();
+        if(mode==='angle')S.angle=null; else if(mode==='area')S.area=null; else S.circle=null;
+        curPts=[]; toast('已清除当前测量'); refresh(); render(); }}
+    ]);
+    return;
+  }
+  // 折线
+  if(mode==='polyline'){
+    if(measureState==='draw'){
+      const has = S.polylines.length>0 || curPts.length>0;
+      showMenu(e,[
+        {label:'编辑已有测量', dis: S.polylines.length===0, fn:()=>{ setState('edit'); toast('编辑态：拖点改形 / 中点+插点 / 右键删点'); }},
+        {label:'把多段连成一段', dis: S.polylines.length<2, fn:doMerge},
+        '-',
+        {label:'清除当前', dis: !has, fn:()=>{ pushHist(); S.polylines=[]; curPts=[]; toast('已清除当前折线'); refresh(); render(); }}
+      ]);
+    } else {
+      const li = hitPolyLine(p);
+      showMenu(e,[
+        {label:'继续绘制', fn:()=>{ setState('draw'); toast('绘制态：逐点点击，双击固化一条'); }},
+        {label:'把多段连成一段', dis: S.polylines.length<2, fn:doMerge},
+        '-',
+        {label:'删除命中的这一条', dis: li===null, fn:()=>{ pushHist(); const nm=S.polylines[li]; S.polylines.splice(li,1); toast('已删除一条折线'); refresh(); render(); }},
+        {label:'清除全部', dis: S.polylines.length===0, fn:()=>{ pushHist(); S.polylines=[]; toast('已清除全部折线'); refresh(); render(); }}
+      ]);
+    }
+    return;
+  }
+  // 描边
+  if(mode==='stroke'){
+    if(measureState==='draw'){
+      const has = S.strokes.length>0;
+      showMenu(e,[
+        {label:'编辑已有测量', dis: !has, fn:()=>{ setState('edit'); toast('编辑态：拖锚点 / 曲线上点两点插入 / 右键删锚点 / 双击闭合'); }},
+        {label:'把多段连成一段', dis: S.strokes.length<2, fn:doMergeStrokes},
+        '-',
+        {label:'清除当前', dis: !has, fn:()=>{ pushHist(); S.strokes=[]; curStroke=null; toast('已清除当前描边'); refresh(); render(); }}
+      ]);
+    } else {
+      const li = hitStrokeLine(p);
+      showMenu(e,[
+        {label:'继续绘制', fn:()=>{ setState('draw'); toast('绘制态：按住画一笔，松手固化'); }},
+        {label:'把多段连成一段', dis: S.strokes.length<2, fn:doMergeStrokes},
+        '-',
+        {label:'删除命中的这一条', dis: li===null, fn:()=>{ pushHist(); S.strokes.splice(li,1); toast('已删除一条描边'); refresh(); render(); }},
+        {label:'清除全部', dis: S.strokes.length===0, fn:()=>{ pushHist(); S.strokes=[]; toast('已清除全部描边'); refresh(); render(); }}
+      ]);
+    }
+    return;
+  }
+}
+/* 折线编辑：右键删锚点（最少留2点）已并入：编辑态右键若无菜单动作时删除锚点 */
+function doMerge(){
+  if(S.polylines.length<2){ toast('至少需要两条折线才能连成一段'); return; }
+  pushHist();
+  const before = S.polylines.length;
+  const L = mergePolylines();
+  if(L!==null){ toast('已把 '+before+' 条按端点最近贪心串接为 1 条，总长 '+f2(px2cm(L))+' cm'); setState('edit'); }
+  refresh(); render();
+}
+
+/* 描边：把多段连成一段 */
+function doMergeStrokes(){
+  if(S.strokes.length<2){ toast('至少需要两条描边才能连成一段'); return; }
+  pushHist();
+  const before = S.strokes.length;
+  const L = mergeStrokes();
+  if(L!==null){ toast('已把 '+before+' 条描边连成 1 条，总长 '+f2(px2cm(L))+' cm'); }
+  refresh(); render();
+}
+
+/* 编辑态右键点锚点/顶点 -> 删除该点 (最少留2点)，否则弹菜单 */
+cv.addEventListener('mousedown', e=>{
+  if(e.button!==2) return;
+  if(measureState!=='edit') return;
+  const p=pos(e);
+  if(mode==='polyline'){
+    const h=hitPolyPt(p);
+    if(h && h.kind==='vtx'){
+      const pts=S.polylines[h.li].pts;
+      if(pts.length<=2){ toast('一条折线最少保留 2 个点'); return; }
+      pushHist(); pts.splice(h.pi,1); toast('已删除该顶点'); refresh(); render();
+    }
+  } else if(mode==='stroke'){
+    const h=hitStrokePt(p);
+    if(h){
+      const A=S.strokes[h.li].anchors;
+      if(A.length<=2){ toast('单条描边最少保留 2 个锚点'); return; }
+      pushHist(); A.splice(h.pi,1); toast('已删除该锚点'); refresh(); render();
+    }
+  }
+});
+
+/* ================= 校准 (SPEC §7) ================= */
+function saveCal(){ try{ localStorage.setItem(LS_KEY, String(pxPerCm)); }catch(e){} }
+function calibrate(){
+  const R=S.ruler;
+  if(!R){ toast('请先切到直尺并生成尺子'); return; }
+  const cmNow = px2cm(R.len);                 // 按当前 pxPerCm 折算
+  const ppc = R.len/8.56;                     // 尺子像素长 = 8.56cm
+  pxPerCm = ppc; saveCal();
+  document.getElementById('ppcVal').textContent = ppc.toFixed(2);
+  document.getElementById('ppcIn').value = ppc.toFixed(2);
+  toast('校准完成：1cm = '+ppc.toFixed(2)+' px（尺子现为 8.56cm）');
+  refresh(); render();
+}
+
+/* ================= 结果面板 (右下角) ================= */
+function fmt(n){ return f2(n); }
+function refresh(){
+  document.getElementById('ppcVal').textContent = pxPerCm.toFixed(2);
+  const totEl=document.getElementById('tot'), list=document.getElementById('list'),
+        body=document.getElementById('resBody'), title=document.getElementById('resTitle');
+  let totalPx=0, html='', unit='cm';
+  if(mode==='polyline'){
+    title.textContent='折线总长';
+    S.polylines.forEach((P,i)=>{
+      const L=polyLen(P.pts); totalPx+=L;
+      html+='<li><span>#'+(i+1)+' · '+P.pts.length+'点</span><b>'+fmt(px2cm(L))+' cm</b></li>';
+    });
+    if(!measureState || measureState==='draw'){
+      const L=polyLen(curPts); if(curPts.length>=2) html+='<li style="opacity:.6"><span>当前(未固化)</span><b>'+fmt(px2cm(L))+' cm</b></li>';
+    }
+  }
+  else if(mode==='stroke'){
+    title.textContent='描边总长';
+    S.strokes.forEach((K,i)=>{
+      const L=crLen(K.anchors,K.closed); totalPx+=L;
+      html+='<li><span>#'+(i+1)+' · '+K.anchors.length+'锚'+(K.closed?' ·闭合':'')+'</span><b>'+fmt(px2cm(L))+' cm</b></li>';
+    });
+    if(curStroke && curStroke.anchors.length>=2){
+      const L=crLen(curStroke.anchors,false); html+='<li style="opacity:.6"><span>当前笔画</span><b>'+fmt(px2cm(L))+' cm</b></li>';
+    }
+  }
+  else if(mode==='angle'){
+    title.textContent='夹角';
+    if(S.angle){ const d=angleDeg(S.angle.a,S.angle.v,S.angle.b);
+      body.innerHTML='<div class="kv"><span>a→顶点→b</span></div><div class="kv"><span>夹角</span><b style="color:#c58cff;font-size:16px">'+fmt(d)+'°</b></div>';
+      totEl.innerHTML=fmt(d)+'<small> °</small>'; list.innerHTML=''; return; }
+  }
+  else if(mode==='area'){
+    title.textContent='面积';
+    if(S.area && S.area.closed){ const A=polyArea(S.area.pts);
+      const per = polyLen(S.area.pts.concat([S.area.pts[0]]));
+      body.innerHTML='<div class="kv"><span>顶点数</span><b>'+S.area.pts.length+'</b></div>'+
+        '<div class="kv"><span>面积</span><b style="color:#4fd18b;font-size:16px">'+fmt(px2cm(A))+' cm²</b></div>'+
+        '<div class="kv"><span>周长</span><b>'+fmt(px2cm(per))+' cm</b></div>';
+      totEl.innerHTML=fmt(px2cm(A))+'<small> cm²</small>'; list.innerHTML=''; return; }
+    else { title.textContent='面积(双击闭合)'; const n=curPts.length;
+      body.innerHTML='<div class="kv"><span>已点顶点</span><b>'+n+'</b></div>'+(n>=3?'<div class="hint">双击闭合计算</div>':'');
+      totEl.innerHTML='—'; list.innerHTML=''; return; }
+  }
+  else if(mode==='circle'){
+    title.textContent='圆 (3点拟合)';
+    if(S.circle){ const r=S.circle.r, d=2*r;
+      body.innerHTML='<div class="kv"><span>直径</span><b>'+fmt(px2cm(d))+' cm</b></div>'+
+        '<div class="kv"><span>半径</span><b>'+fmt(px2cm(r))+' cm</b></div>'+
+        '<div class="kv"><span>周长</span><b>'+fmt(px2cm(2*Math.PI*r))+' cm</b></div>'+
+        '<div class="kv"><span>面积</span><b>'+fmt(px2cm(Math.PI*r*r))+' cm²</b></div>';
+      totEl.innerHTML=fmt(px2cm(d))+'<small> cm ⌀</small>'; list.innerHTML=''; return; }
+  }
+  else if(mode==='ruler'){
+    title.textContent='直尺';
+    if(S.ruler){ const {a,b}=rulerEnds(S.ruler); const L=dist(a,b);
+      const deg=((S.ruler.angle*180/Math.PI)%360+360)%360;
+      body.innerHTML='<div class="kv"><span>长度</span><b style="color:#4da3ff;font-size:16px">'+fmt(px2cm(L))+' cm</b></div>'+
+        '<div class="kv"><span>像素</span><b>'+Math.round(L)+' px</b></div>'+
+        '<div class="kv"><span>角度</span><b>'+fmt(deg)+'°</b></div>'+
+        '<div class="hint">拖尺身平移 · 黄右端改长 · 绿左端旋转</div>';
+      totEl.innerHTML=fmt(px2cm(L))+'<small> cm</small>'; list.innerHTML=''; return; }
+  }
+  totEl.innerHTML = (mode==='polyline'||mode==='stroke') ? fmt(px2cm(totalPx))+'<small> cm</small>' : '0.00<small> cm</small>';
+  list.innerHTML = html || '<li><span style="color:#5c6675">暂无测量</span></li>';
+  body.innerHTML='<ul id="list">'+html+'</ul>';
+  setHint();
+}
+
+/* ================= 提示 & 初始化 ================= */
+function setHint(){
+  const h={
+    ruler:'直尺：选中即生成；点空白处把<b>起点(左端)</b>放到该点。拖尺身平移，拖<b>黄右端</b>改长，拖<b>绿左端</b>旋转；拖到与银行卡等长后点“校准”。',
+    polyline: measureState==='draw'
+      ? '折线·绘制：逐点点击追加，<kbd>双击</kbd>固化一条后接着画下一条。右键→编辑已有测量。'
+      : '折线·编辑：拖点改形，点中点 <b>+</b> 插点，右键点顶点删点。右键→继续绘制 / 连成一段 / 删除这一条。',
+    stroke: measureState==='draw'
+      ? '描边·绘制：按住画一笔，松手固化（平滑+每~24px 抽稀锚点，绝不铺密集节点），可连续多笔。'
+      : '描边·编辑：拖方锚点改形；在曲线上点一下插入锚点；右键点锚点删点；<kbd>双击</kbd>切换闭合/开口。',
+    angle:'角度：依次点 <b>边点 → 顶点 → 边点</b>，自动算夹角。固化后 <b>拖动三个顶点</b>可改形，夹角实时刷新。',
+    area:'面积：逐点围多边形，<kbd>双击</kbd>闭合后用鞋带公式算 cm²。',
+    circle:'圆：点圆上任意 <b>3 个点</b>（每点一个可见点），自动拟合圆心并给出直径/半径/周长/面积。'
+  };
+  document.getElementById('hint').innerHTML = h[mode]||'';
+  // 画布顶部模式使用说明横幅
+  const tipEl = document.getElementById('modeTip');
+  if(tipEl) tipEl.innerHTML = h[mode]||'';
+}
+
+const MODES=[
+  {m:'ruler', ic:'📏', t:'直尺'},
+  {m:'polyline', ic:'📐', t:'折线'},
+  {m:'stroke', ic:'✏️', t:'画笔描边'},
+  {m:'angle', ic:'∠', t:'角度'},
+  {m:'area', ic:'⬟', t:'面积'},
+  {m:'circle', ic:'◯', t:'圆'}
+];
+(function init(){
+  const box=document.getElementById('modes');
+  MODES.forEach(x=>{
+    const b=document.createElement('button');
+    b.className='mbtn'+(x.m===mode?' on':''); b.dataset.m=x.m;
+    b.innerHTML='<span class="ic">'+x.ic+'</span>'+x.t;
+    b.onclick=()=>setMode(x.m);
+    box.appendChild(b);
+  });
+  document.querySelectorAll('#stateSeg button').forEach(b=>b.onclick=()=>setState(b.dataset.s));
+  document.getElementById('ppcIn').onchange=e=>{
+    const v=parseFloat(e.target.value); if(v>1){ pxPerCm=v; saveCal(); refresh(); render(); }
+  };
+  document.getElementById('calBtn').onclick=calibrate;
+  document.getElementById('resetCal').onclick=()=>{
+    pxPerCm=37.8; saveCal(); document.getElementById('ppcIn').value='37.8'; refresh(); render(); toast('已恢复 96dpi (37.8 px/cm)');
+  };
+  document.getElementById('undoBtn').onclick=undo;
+  document.getElementById('clearBtn').onclick=()=>{
+    pushHist();
+    if(mode==='ruler')S.ruler=null; else if(mode==='polyline'){S.polylines=[];curPts=[];}
+    else if(mode==='stroke'){S.strokes=[];curStroke=null;}
+    else if(mode==='angle')S.angle=null; else if(mode==='area'){S.area=null;curPts=[];}
+    else S.circle=null;
+    toast('已清除当前'); refresh(); render();
+  };
+  window.addEventListener('resize', resize);
+  setMode('ruler', false);
+  resize();
+  toast('就绪 · 当前 '+pxPerCm.toFixed(2)+' px/cm');
+})();
+</script>
+</body>
+</html>

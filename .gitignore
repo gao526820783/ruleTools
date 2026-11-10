@@ -1,0 +1,24 @@
+# ===== 运行时 / 内部目录（勿提交）=====
+# Box-Agent 会话运行时与临时目录
+.box-agent/
+.box-agent-scratch/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# ===== 直尺校准持久化配置（运行时生成，本地即可）=====
+screen_measure_config.json
+屏幕测量工具箱/screen_measure_config.json
+
+# ===== 操作系统杂项 =====
+.DS_Store
+Thumbs.db
+
+# ===== 编辑器 =====
+.vscode/
+.idea/
